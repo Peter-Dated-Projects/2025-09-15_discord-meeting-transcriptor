@@ -210,6 +210,37 @@ class Chat(commands.Cog):
                 # Check if we have an active conversation for this thread
                 conversation = self.services.conversation_manager.get_conversation(thread_id)
 
+                # If not in memory, try to reload from storage.
+                # This handles post-restart or idle-eviction scenarios where the conversation
+                # was persisted to SQL/disk but no longer lives in the in-memory cache.
+                # echo_manager.is_echo_enabled covers threads that had echo auto-enabled when
+                # the thread was first created; is_known_thread covers threads loaded into the
+                # known_thread_ids cache during the current session.
+                if not conversation and (
+                    self.services.echo_manager.is_echo_enabled(thread_id)
+                    or self.services.conversation_manager.is_known_thread(thread_id)
+                ):
+                    try:
+                        conversation = await self.services.conversation_manager.load_conversation_from_storage(
+                            thread_id=thread_id,
+                            conversations_sql_manager=self.services.conversations_sql_manager,
+                            conversation_file_manager=self.services.conversation_file_service_manager,
+                            conversations_store_sql_manager=self.services.conversations_store_sql_manager,
+                        )
+                        if conversation:
+                            await self.services.logging_service.info(
+                                f"Reloaded conversation for thread {thread_id} from storage "
+                                f"(post-restart / idle-eviction recovery)"
+                            )
+                        else:
+                            await self.services.logging_service.warning(
+                                f"Thread {thread_id} is echo-enabled but has no stored conversation to reload"
+                            )
+                    except Exception as e:
+                        await self.services.logging_service.error(
+                            f"Failed to reload conversation for thread {thread_id}: {e}"
+                        )
+
                 if conversation:
                     # Message in existing conversation thread
                     await self.services.logging_service.info(
