@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Service management script for Discord Meeting Transcriptor
-# Usage: ./dy.sh [up|down|status|restart]
+# Usage: ./dy.sh [up|down|run|restart|destroy|status|logs]
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -366,6 +366,19 @@ case "${1:-}" in
         echo ""
         show_status
         ;;
+    run)
+        echo -e "${BLUE}=== Starting All Services ===${NC}"
+        start_docker_services
+        echo ""
+        start_ollama
+        start_whisper
+        start_chromadb_admin
+        echo ""
+        show_status
+        echo ""
+        echo -e "${BLUE}=== Running Application ===${NC}"
+        uv run main.py
+        ;;
     down)
         echo -e "${BLUE}=== Stopping All Services ===${NC}"
         stop_service "Ollama" "$OLLAMA_PID_FILE"
@@ -418,10 +431,11 @@ case "${1:-}" in
         echo -e "Services: mysql, chromadb"
         ;;
     *)
-        echo "Usage: $0 {up|down|restart|destroy|status|logs}"
+        echo "Usage: $0 {up|down|run|restart|destroy|status|logs}"
         echo ""
         echo "Commands:"
         echo "  up      - Start all services (Docker, Ollama, Whisper Flask & ChromaDB Admin)"
+        echo "  run     - Start all services and run the application (uv run main.py)"
         echo "  down    - Stop all services (keeps containers)"
         echo "  restart - Restart all services"
         echo "  destroy - Stop and remove all Docker containers"
